@@ -19,6 +19,6 @@ RMQ queue. Consumer then receives this message and updates it status in db.
 - run go app consumer
 
 ## RabbitMQ, Postgres Endpoints and functionality
-- rabbitMQ accessible on: http://localhost:15672/#/
+- rabbitMQ accessible on: http://localhost:15672/#/ (user: guest, pass: guest)
 - endpoints: http://localhost:8080/api/message/send
   - body: {"header": "he","body": "bo"}
