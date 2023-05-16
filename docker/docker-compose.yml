@@ -25,3 +25,30 @@ services:
       - 15672:15672
     networks:
       - distributed-proxy
+
+  go-distributed-events-producer:
+    build:
+      context: ../producer
+      dockerfile: .Dockerfile
+    ports:
+      - 8081:8081
+    depends_on:
+      - distributed-events-db
+      - rabbitmq
+    restart: unless-stopped
+    networks:
+      - distributed-proxy
+
+  go-distributed-events-consumer:
+    build:
+      context: ../consumer
+      dockerfile: .Dockerfile
+    ports:
+      - 8082:8082
+    depends_on:
+      - distributed-events-db
+      - rabbitmq
+      - go-distributed-events-producer
+    restart: unless-stopped
+    networks:
+      - distributed-proxy
