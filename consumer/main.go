@@ -21,11 +21,12 @@ func main() {
 
 	// initialize repository
 	messageRepository := repository.NewMessageRepository(configs.DB)
+	messageHistoryRepository := repository.NewMessageHistoryRepository(configs.DB)
 
-	initializeRMQ(&config, messageRepository)
+	initializeRMQ(&config, messageRepository, messageHistoryRepository)
 }
 
-func initializeRMQ(config *configs.Config, messageRepository *repository.MessageRepository) {
+func initializeRMQ(config *configs.Config, messageRepository *repository.MessageRepository, messageHistoryRepository *repository.MessageHistoryRepository) {
 	// set rmq
 	conn, err := amqp.Dial(config.RMQUrl)
 	if err != nil {
@@ -53,13 +54,13 @@ func initializeRMQ(config *configs.Config, messageRepository *repository.Message
 	forever := make(chan bool)
 	go func() {
 		for m := range msg {
-			go handleMessage(m, messageRepository)
+			go handleMessage(m, messageRepository, messageHistoryRepository)
 		}
 	}()
 	<-forever
 }
 
-func handleMessage(msg amqp.Delivery, messageRepository *repository.MessageRepository) {
+func handleMessage(msg amqp.Delivery, messageRepository *repository.MessageRepository, messageHistoryRepository *repository.MessageHistoryRepository) {
 	response := &rmq.Message{}
 	err := json.Unmarshal(msg.Body, response)
 
@@ -69,9 +70,14 @@ func handleMessage(msg amqp.Delivery, messageRepository *repository.MessageRepos
 	}
 
 	log.Printf("Successfully extracted: %s\n", response)
-	updatedMessage, err := messageRepository.UpdateMessage(response)
+	updatedMessage, err := messageRepository.Update(response)
 	if err != nil {
 		log.Printf("ERROR: cannot update a message")
+	} else {
+		_, err := messageHistoryRepository.Save(updatedMessage.MessageId, "SENT", "RECEIVED")
+		if err != nil {
+			log.Printf("ERROR: cannot insert message history for message %s", updatedMessage.MessageId)
+		}
 	}
 	log.Printf("Successfully update: %s", updatedMessage)
 }

@@ -3,28 +3,32 @@ package service
 import (
 	"go-distributed-event-streaming/configs"
 	"go-distributed-event-streaming/dto/response"
-	"go-distributed-event-streaming/model"
 	"go-distributed-event-streaming/producer"
 	"go-distributed-event-streaming/repository"
 )
 
 type Message interface {
-	SaveMessage(message *model.Message) (response *response.MessageResponse, err error)
+	SaveMessage(header string, body string) (response.MessageResponse, error)
 }
 
 type MessageService struct {
-	conf              *configs.Config
-	messageRepository *repository.MessageRepository
+	conf                     *configs.Config
+	messageRepository        *repository.MessageRepository
+	messageHistoryRepository *repository.MessageHistoryRepository
 }
 
-func NewMessageService(config *configs.Config, messageRepository *repository.MessageRepository) *MessageService {
-	return &MessageService{conf: config, messageRepository: messageRepository}
+func NewMessageService(config *configs.Config, messageRepository *repository.MessageRepository, messageHistoryRepository *repository.MessageHistoryRepository) *MessageService {
+	return &MessageService{conf: config, messageRepository: messageRepository, messageHistoryRepository: messageHistoryRepository}
 }
 
 func (mess *MessageService) SaveMessage(header string, body string) (response.MessageResponse, error) {
 	// save message
-	var savedMessage model.Message
 	savedMessage, err := mess.messageRepository.SaveMessage(header, body)
+	if err != nil {
+		return response.MessageResponse{}, err
+	}
+
+	_, err = mess.messageHistoryRepository.Save(savedMessage.MessageId, "", "SENT")
 	if err != nil {
 		return response.MessageResponse{}, err
 	}
@@ -39,7 +43,7 @@ func (mess *MessageService) SaveMessage(header string, body string) (response.Me
 	rmqProducer.ProduceMessage(&savedMessage)
 
 	return response.MessageResponse{
-		ID:        savedMessage.ID,
+		ID:        savedMessage.MessageId,
 		CreatedAt: savedMessage.CreatedAt,
 		Header:    savedMessage.Header,
 		Body:      savedMessage.Body,
