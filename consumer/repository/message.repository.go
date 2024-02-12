@@ -8,7 +8,7 @@ import (
 )
 
 type MessageRepositoryInterface interface {
-	SaveMessage(header string, body string)
+	Update(message *rmq.Message) (model.Message, error)
 }
 
 type MessageRepository struct {
@@ -19,13 +19,12 @@ func NewMessageRepository(postgresDB *gorm.DB) *MessageRepository {
 	return &MessageRepository{postgresDB: postgresDB}
 }
 
-func (repo *MessageRepository) UpdateMessage(message *rmq.Message) (model.Message, error) {
-	savedMessage := repo.postgresDB.Model(&model.Message{}).Where("id = ?", message.ID).Updates(model.Message{UpdatedAt: time.Now(), Status: "RECEIVED"})
+func (repo *MessageRepository) Update(message *rmq.Message) (model.Message, error) {
+	savedMessage := repo.postgresDB.Model(&model.Message{}).Where("message_id = ?", message.ID).Updates(model.Message{UpdatedAt: time.Now(), Status: "RECEIVED"})
 
-	//savedMessage := repo.postgresDB.Model(&model.Message{}).Where("id = ?", message.ID).Update("status", "RECEIVED")
 	if savedMessage.Error != nil {
 		return model.Message{}, savedMessage.Error
 	} else {
-		return model.Message{ID: message.ID}, nil
+		return model.Message{MessageId: message.ID}, nil
 	}
 }

@@ -29,9 +29,10 @@ func main() {
 
 	// initialize repository
 	messageRepository := repository.NewMessageRepository(configs.DB)
+	messageHistoryRepository := repository.NewMessageHistoryRepository(configs.DB)
 
 	// initialize service
-	messageService := service.NewMessageService(&config, messageRepository)
+	messageService := service.NewMessageService(&config, messageRepository, messageHistoryRepository)
 
 	// initialize controllers and routes
 	MessageController = handler.NewMessageHandler(configs.DB, messageService, &config)

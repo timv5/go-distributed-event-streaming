@@ -39,7 +39,7 @@ func (pr RMQProducer) ProduceMessage(savedMessage *model.Message) {
 	log.Println(queue)
 
 	// prepare data
-	message := rmq.Message{SentAt: time.Now(), Header: savedMessage.Header, Body: savedMessage.Body, ID: savedMessage.ID}
+	message := rmq.Message{SentAt: time.Now(), Header: savedMessage.Header, Body: savedMessage.Body, ID: savedMessage.MessageId}
 	stringMessage, err := json.Marshal(message)
 	if err != nil {
 		panic("Cannot marshal message to string")

@@ -8,7 +8,7 @@ import (
 )
 
 type MessageRepositoryInterface interface {
-	SaveMessage(header string, body string)
+	SaveMessage(header string, body string) (model.Message, error)
 }
 
 type MessageRepository struct {
@@ -21,7 +21,7 @@ func NewMessageRepository(postgresDB *gorm.DB) *MessageRepository {
 
 func (repo *MessageRepository) SaveMessage(header string, body string) (model.Message, error) {
 	nowTime := time.Now()
-	createMessage := model.Message{ID: uuid.NewV4().String(), CreatedAt: nowTime, Body: body, Header: header, Status: "SENT"}
+	createMessage := model.Message{MessageId: uuid.NewV4().String(), CreatedAt: nowTime, Body: body, Header: header, Status: "SENT"}
 
 	savedMessage := repo.postgresDB.Create(&createMessage)
 	if savedMessage.Error != nil {
