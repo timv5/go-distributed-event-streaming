@@ -8,22 +8,20 @@ import (
 )
 
 type MessageRepositoryInterface interface {
-	SaveMessage(header string, body string) (model.Message, error)
+	SaveMessage(tx *gorm.DB, header string, body string) (model.Message, error)
 }
 
-type MessageRepository struct {
-	postgresDB *gorm.DB
+type MessageRepository struct{}
+
+func NewMessageRepository() *MessageRepository {
+	return &MessageRepository{}
 }
 
-func NewMessageRepository(postgresDB *gorm.DB) *MessageRepository {
-	return &MessageRepository{postgresDB: postgresDB}
-}
-
-func (repo *MessageRepository) SaveMessage(header string, body string) (model.Message, error) {
+func (repo *MessageRepository) SaveMessage(tx *gorm.DB, header string, body string) (model.Message, error) {
 	nowTime := time.Now()
 	createMessage := model.Message{MessageId: uuid.NewV4().String(), CreatedAt: nowTime, Body: body, Header: header, Status: "SENT"}
 
-	savedMessage := repo.postgresDB.Create(&createMessage)
+	savedMessage := tx.Create(&createMessage)
 	if savedMessage.Error != nil {
 		return model.Message{}, savedMessage.Error
 	} else {
