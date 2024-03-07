@@ -6,6 +6,7 @@ import (
 	"consumer/rmq"
 	"encoding/json"
 	"github.com/streadway/amqp"
+	"gorm.io/gorm"
 	"log"
 )
 
@@ -17,16 +18,19 @@ func main() {
 	}
 
 	// connect to database
-	configs.ConnectToDB(&config)
+	gormDB, err := configs.ConnectToDB(&config)
+	if err != nil {
+		panic("Failed to connect to DB")
+	}
 
 	// initialize repository
-	messageRepository := repository.NewMessageRepository(configs.DB)
-	messageHistoryRepository := repository.NewMessageHistoryRepository(configs.DB)
+	messageRepository := repository.NewMessageRepository()
+	messageHistoryRepository := repository.NewMessageHistoryRepository()
 
-	initializeRMQ(&config, messageRepository, messageHistoryRepository)
+	initializeRMQ(&config, messageRepository, messageHistoryRepository, gormDB)
 }
 
-func initializeRMQ(config *configs.Config, messageRepository *repository.MessageRepository, messageHistoryRepository *repository.MessageHistoryRepository) {
+func initializeRMQ(config *configs.Config, messageRepository *repository.MessageRepository, messageHistoryRepository *repository.MessageHistoryRepository, postgresDB *gorm.DB) {
 	// set rmq
 	conn, err := amqp.Dial(config.RMQUrl)
 	if err != nil {
@@ -54,30 +58,41 @@ func initializeRMQ(config *configs.Config, messageRepository *repository.Message
 	forever := make(chan bool)
 	go func() {
 		for m := range msg {
-			go handleMessage(m, messageRepository, messageHistoryRepository)
+			go handleMessage(m, messageRepository, messageHistoryRepository, postgresDB)
 		}
 	}()
 	<-forever
 }
 
-func handleMessage(msg amqp.Delivery, messageRepository *repository.MessageRepository, messageHistoryRepository *repository.MessageHistoryRepository) {
+func handleMessage(msg amqp.Delivery, messageRepository *repository.MessageRepository, messageHistoryRepository *repository.MessageHistoryRepository, postgresDB *gorm.DB) {
 	response := &rmq.Message{}
 	err := json.Unmarshal(msg.Body, response)
-
 	if err != nil {
 		log.Printf("ERROR: fail unmarshl: %s", msg.Body)
 		return
 	}
 
-	log.Printf("Successfully extracted: %s\n", response)
-	updatedMessage, err := messageRepository.Update(response)
-	if err != nil {
-		log.Printf("ERROR: cannot update a message")
-	} else {
-		_, err := messageHistoryRepository.Save(updatedMessage.MessageId, "SENT", "RECEIVED")
-		if err != nil {
-			log.Printf("ERROR: cannot insert message history for message %s", updatedMessage.MessageId)
+	tx := postgresDB.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
 		}
+	}()
+
+	updatedMessage, err := messageRepository.Update(tx, response)
+	if err != nil {
+		tx.Rollback()
+		log.Printf("ERROR: cannot update a message")
+		return
 	}
+
+	_, err = messageHistoryRepository.Save(tx, updatedMessage.MessageId, "SENT", "RECEIVED")
+	if err != nil {
+		tx.Rollback()
+		log.Printf("ERROR: cannot insert message history for message %s", updatedMessage.MessageId)
+		return
+	}
+
+	tx.Commit()
 	log.Printf("Successfully update: %s", updatedMessage)
 }

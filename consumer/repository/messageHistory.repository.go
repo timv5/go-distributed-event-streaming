@@ -8,18 +8,16 @@ import (
 )
 
 type MessageHistoryRepositoryInterface interface {
-	Save(messageId string, fromStatus string, toStatus string) (model.MessageHistory, error)
+	Save(tx *gorm.DB, messageId string, fromStatus string, toStatus string) (model.MessageHistory, error)
 }
 
-type MessageHistoryRepository struct {
-	postgresDB *gorm.DB
+type MessageHistoryRepository struct{}
+
+func NewMessageHistoryRepository() *MessageHistoryRepository {
+	return &MessageHistoryRepository{}
 }
 
-func NewMessageHistoryRepository(postgresDB *gorm.DB) *MessageHistoryRepository {
-	return &MessageHistoryRepository{postgresDB: postgresDB}
-}
-
-func (repo *MessageHistoryRepository) Save(messageId string, fromStatus string, toStatus string) (model.MessageHistory, error) {
+func (repo *MessageHistoryRepository) Save(tx *gorm.DB, messageId string, fromStatus string, toStatus string) (model.MessageHistory, error) {
 	nowTime := time.Now()
 	messageHistoryEntity := model.MessageHistory{
 		MessageId:  messageId,
@@ -28,7 +26,7 @@ func (repo *MessageHistoryRepository) Save(messageId string, fromStatus string, 
 		ToStatus:   toStatus,
 	}
 
-	savedMessageHistory := repo.postgresDB.Create(&messageHistoryEntity)
+	savedMessageHistory := tx.Create(&messageHistoryEntity)
 	if savedMessageHistory.Error != nil {
 		return model.MessageHistory{}, savedMessageHistory.Error
 	} else {

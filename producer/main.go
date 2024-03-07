@@ -25,14 +25,17 @@ func main() {
 	}
 
 	// connect to database
-	configs.ConnectToDB(&config)
+	gormDB, err := configs.ConnectToDB(&config)
+	if err != nil {
+		panic("Failed to connect to DB")
+	}
 
 	// initialize repository
-	messageRepository := repository.NewMessageRepository(configs.DB)
-	messageHistoryRepository := repository.NewMessageHistoryRepository(configs.DB)
+	messageRepository := repository.NewMessageRepository()
+	messageHistoryRepository := repository.NewMessageHistoryRepository()
 
 	// initialize service
-	messageService := service.NewMessageService(&config, messageRepository, messageHistoryRepository)
+	messageService := service.NewMessageService(&config, messageRepository, messageHistoryRepository, gormDB)
 
 	// initialize controllers and routes
 	MessageController = handler.NewMessageHandler(configs.DB, messageService, &config)

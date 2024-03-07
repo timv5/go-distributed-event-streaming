@@ -5,6 +5,7 @@ import (
 	"go-distributed-event-streaming/dto/response"
 	"go-distributed-event-streaming/producer"
 	"go-distributed-event-streaming/repository"
+	"gorm.io/gorm"
 )
 
 type Message interface {
@@ -15,21 +16,38 @@ type MessageService struct {
 	conf                     *configs.Config
 	messageRepository        *repository.MessageRepository
 	messageHistoryRepository *repository.MessageHistoryRepository
+	postgresDB               *gorm.DB
 }
 
-func NewMessageService(config *configs.Config, messageRepository *repository.MessageRepository, messageHistoryRepository *repository.MessageHistoryRepository) *MessageService {
-	return &MessageService{conf: config, messageRepository: messageRepository, messageHistoryRepository: messageHistoryRepository}
+func NewMessageService(config *configs.Config, messageRepository *repository.MessageRepository,
+	messageHistoryRepository *repository.MessageHistoryRepository, postgresDB *gorm.DB) *MessageService {
+	return &MessageService{conf: config, messageRepository: messageRepository, messageHistoryRepository: messageHistoryRepository, postgresDB: postgresDB}
 }
 
 func (mess *MessageService) SaveMessage(header string, body string) (response.MessageResponse, error) {
+	tx := mess.postgresDB.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
 	// save message
-	savedMessage, err := mess.messageRepository.SaveMessage(header, body)
+	savedMessage, err := mess.messageRepository.SaveMessage(tx, header, body)
 	if err != nil {
+		tx.Rollback()
 		return response.MessageResponse{}, err
 	}
 
-	_, err = mess.messageHistoryRepository.Save(savedMessage.MessageId, "", "SENT")
+	_, err = mess.messageHistoryRepository.Save(tx, savedMessage.MessageId, "", "SENT")
 	if err != nil {
+		tx.Rollback()
+		return response.MessageResponse{}, err
+	}
+
+	err = tx.Commit().Error
+	if err != nil {
+		tx.Rollback()
 		return response.MessageResponse{}, err
 	}
 

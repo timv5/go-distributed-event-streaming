@@ -8,19 +8,17 @@ import (
 )
 
 type MessageRepositoryInterface interface {
-	Update(message *rmq.Message) (model.Message, error)
+	Update(tx *gorm.DB, message *rmq.Message) (model.Message, error)
 }
 
-type MessageRepository struct {
-	postgresDB *gorm.DB
+type MessageRepository struct{}
+
+func NewMessageRepository() *MessageRepository {
+	return &MessageRepository{}
 }
 
-func NewMessageRepository(postgresDB *gorm.DB) *MessageRepository {
-	return &MessageRepository{postgresDB: postgresDB}
-}
-
-func (repo *MessageRepository) Update(message *rmq.Message) (model.Message, error) {
-	savedMessage := repo.postgresDB.Model(&model.Message{}).Where("message_id = ?", message.ID).Updates(model.Message{UpdatedAt: time.Now(), Status: "RECEIVED"})
+func (repo *MessageRepository) Update(tx *gorm.DB, message *rmq.Message) (model.Message, error) {
+	savedMessage := tx.Model(&model.Message{}).Where("message_id = ?", message.ID).Updates(model.Message{UpdatedAt: time.Now(), Status: "RECEIVED"})
 
 	if savedMessage.Error != nil {
 		return model.Message{}, savedMessage.Error
