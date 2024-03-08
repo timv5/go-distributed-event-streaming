@@ -9,6 +9,7 @@ import (
 	"go-distributed-event-streaming/route"
 	"go-distributed-event-streaming/service"
 	"log"
+	"time"
 )
 
 var (
@@ -33,9 +34,30 @@ func main() {
 	// initialize repository
 	messageRepository := repository.NewMessageRepository()
 	messageHistoryRepository := repository.NewMessageHistoryRepository()
+	outboxMessageRepository := repository.NewOutboxMessageRepository()
 
 	// initialize service
-	messageService := service.NewMessageService(&config, messageRepository, messageHistoryRepository, gormDB)
+	messageService := service.NewMessageService(&config, messageRepository, messageHistoryRepository, gormDB, outboxMessageRepository)
+
+	// scheduler
+	go func() {
+		for {
+			tx := gormDB.Begin()
+			messages, err := outboxMessageRepository.Fetch(tx)
+			if err != nil {
+				tx.Rollback()
+				log.Fatalf("Failed to fetch messages: %v", err)
+			}
+
+			err = service.HandleOutboxMessages(&config, messages)
+			if err != nil {
+				tx.Rollback()
+			}
+			tx.Commit()
+
+			time.Sleep(5 * time.Second)
+		}
+	}()
 
 	// initialize controllers and routes
 	MessageController = handler.NewMessageHandler(configs.DB, messageService, &config)

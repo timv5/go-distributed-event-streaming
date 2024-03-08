@@ -15,3 +15,10 @@ create table message_histories
     from_status varchar(128),
     to_status varchar(128)
 );
+
+create table outbox_messages
+(
+    outbox_message_id varchar(512) not null,
+    created_at date,
+    body TEXT
+);

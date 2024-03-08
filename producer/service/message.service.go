@@ -3,8 +3,8 @@ package service
 import (
 	"go-distributed-event-streaming/configs"
 	"go-distributed-event-streaming/dto/response"
-	"go-distributed-event-streaming/producer"
 	"go-distributed-event-streaming/repository"
+	"go-distributed-event-streaming/utils"
 	"gorm.io/gorm"
 )
 
@@ -16,12 +16,13 @@ type MessageService struct {
 	conf                     *configs.Config
 	messageRepository        *repository.MessageRepository
 	messageHistoryRepository *repository.MessageHistoryRepository
+	outboxMessageRepository  *repository.OutboxMessageRepository
 	postgresDB               *gorm.DB
 }
 
 func NewMessageService(config *configs.Config, messageRepository *repository.MessageRepository,
-	messageHistoryRepository *repository.MessageHistoryRepository, postgresDB *gorm.DB) *MessageService {
-	return &MessageService{conf: config, messageRepository: messageRepository, messageHistoryRepository: messageHistoryRepository, postgresDB: postgresDB}
+	messageHistoryRepository *repository.MessageHistoryRepository, postgresDB *gorm.DB, outboxMessageRepository *repository.OutboxMessageRepository) *MessageService {
+	return &MessageService{conf: config, messageRepository: messageRepository, messageHistoryRepository: messageHistoryRepository, postgresDB: postgresDB, outboxMessageRepository: outboxMessageRepository}
 }
 
 func (mess *MessageService) SaveMessage(header string, body string) (response.MessageResponse, error) {
@@ -45,20 +46,15 @@ func (mess *MessageService) SaveMessage(header string, body string) (response.Me
 		return response.MessageResponse{}, err
 	}
 
+	// save to outbox, so we can pick it up later
+	savedMessageJson, err := utils.MarshalJSON(&savedMessage)
+	_, err = mess.outboxMessageRepository.Save(tx, savedMessageJson)
+
 	err = tx.Commit().Error
 	if err != nil {
 		tx.Rollback()
 		return response.MessageResponse{}, err
 	}
-
-	// publish message
-	rmqProducer := producer.RMQProducer{
-		ExchangeKey:      mess.conf.RMQExchangeKey,
-		QueueName:        mess.conf.RMQQueueName,
-		ConnectionString: mess.conf.RMQUrl,
-	}
-
-	rmqProducer.ProduceMessage(&savedMessage)
 
 	return response.MessageResponse{
 		ID:        savedMessage.MessageId,

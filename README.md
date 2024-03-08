@@ -4,6 +4,9 @@ Distributed event streaming written in Golang using RabbitMQ
 ## Description
 First call exposed endpoint. Message is saved to database and published to
 RMQ queue. Consumer then receives this message and updates it status in db.
+Project also contains **outbox patter**. Before message is sent from producer to consumer it's first saved to outbox
+db table, so that we ensure transaction is completed. In main class goroutine picks up outbox records from db table
+every 5s, unmarshall them and sends them on queue for consumer.
 
 ## Used technologies and prerequisites
 - golang
