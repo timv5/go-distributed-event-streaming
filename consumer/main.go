@@ -28,14 +28,31 @@ func main() {
 	// initialize service
 	consumerService := service.NewConsumerService(&config, messageRepository, messageHistoryRepository, gormDB)
 
-	initializeRMQ(&config, consumerService)
+	connectToRMQ(&config, consumerService)
 }
 
-func initializeRMQ(config *configs.Config, consumerService *service.ConsumerService) {
+func connectToRMQ(config *configs.Config, consumerService *service.ConsumerService) {
+	ch, err := initializeRMQ(config)
+	msg, err := ch.Consume(config.RMQQueueName, "", true, false, false, false, nil)
+	if err != nil {
+		panic("C")
+	}
+
+	forever := make(chan bool)
+	go func() {
+		for m := range msg {
+			consumerService.HandleMessage(m)
+		}
+	}()
+	<-forever
+}
+
+func initializeRMQ(config *configs.Config) (ch *amqp.Channel, err error) {
 	// set rmq
 	conn, err := amqp.Dial(config.RMQUrl)
 	if err != nil {
-		panic("Could not initialize RMQ")
+		log.Fatalf("Could not initialize RMQ")
+		return nil, err
 	}
 	defer func(conn *amqp.Connection) {
 		err := conn.Close()
@@ -47,10 +64,12 @@ func initializeRMQ(config *configs.Config, consumerService *service.ConsumerServ
 	log.Println("Successfully connected to RMQ")
 
 	// connect to channel
-	ch, err := conn.Channel()
+	ch, err = conn.Channel()
 	if err != nil {
-		panic("Cannot connect to RMQ channel")
+		log.Fatalf("Cannot connect to RMQ channel")
+		return nil, err
 	}
+
 	defer func(ch *amqp.Channel) {
 		err := ch.Close()
 		if err != nil {
@@ -60,17 +79,11 @@ func initializeRMQ(config *configs.Config, consumerService *service.ConsumerServ
 
 	queue, err := ch.QueueDeclare(config.RMQQueueName, false, false, false, false, nil)
 	if err != nil {
-		panic("Cannot connect to Queue")
+		log.Fatalf("Cannot connect to Queue")
+		return nil, err
 	}
+	log.Print("Connected to queue")
 	log.Println(queue)
 
-	msg, err := ch.Consume(config.RMQQueueName, "", true, false, false, false, nil)
-
-	forever := make(chan bool)
-	go func() {
-		for m := range msg {
-			consumerService.HandleMessage(m)
-		}
-	}()
-	<-forever
+	return ch, nil
 }
