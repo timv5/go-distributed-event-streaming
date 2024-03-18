@@ -5,6 +5,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"go-distributed-event-streaming/configs"
 	"go-distributed-event-streaming/handler"
+	"go-distributed-event-streaming/producer"
 	"go-distributed-event-streaming/repository"
 	"go-distributed-event-streaming/route"
 	"go-distributed-event-streaming/service"
@@ -36,7 +37,11 @@ func main() {
 	messageHistoryRepository := repository.NewMessageHistoryRepository()
 	outboxMessageRepository := repository.NewOutboxMessageRepository()
 
+	// initialize rm handler
+	rmqProducer := producer.NewRMQProducer(&config)
+
 	// initialize service
+	outboxService := service.NewOutboxService(rmqProducer)
 	messageService := service.NewMessageService(&config, messageRepository, messageHistoryRepository, gormDB, outboxMessageRepository)
 
 	// scheduler
@@ -49,7 +54,7 @@ func main() {
 				log.Fatalf("Failed to fetch messages: %v", err)
 			}
 
-			err = service.HandleOutboxMessages(&config, messages)
+			err = outboxService.HandleOutboxMessages(messages)
 			if err != nil {
 				tx.Rollback()
 			}
