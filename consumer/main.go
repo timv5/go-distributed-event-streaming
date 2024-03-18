@@ -37,7 +37,12 @@ func initializeRMQ(config *configs.Config, consumerService *service.ConsumerServ
 	if err != nil {
 		panic("Could not initialize RMQ")
 	}
-	defer conn.Close()
+	defer func(conn *amqp.Connection) {
+		err := conn.Close()
+		if err != nil {
+			panic("Could not initialize RMQ")
+		}
+	}(conn)
 
 	log.Println("Successfully connected to RMQ")
 
@@ -46,7 +51,12 @@ func initializeRMQ(config *configs.Config, consumerService *service.ConsumerServ
 	if err != nil {
 		panic("Cannot connect to RMQ channel")
 	}
-	defer ch.Close()
+	defer func(ch *amqp.Channel) {
+		err := ch.Close()
+		if err != nil {
+			panic("Cannot connect to RMQ channel")
+		}
+	}(ch)
 
 	queue, err := ch.QueueDeclare(config.RMQQueueName, false, false, false, false, nil)
 	if err != nil {
