@@ -3,10 +3,8 @@ package main
 import (
 	"consumer/configs"
 	"consumer/repository"
-	"consumer/rmq"
-	"encoding/json"
+	"consumer/service"
 	"github.com/streadway/amqp"
-	"gorm.io/gorm"
 	"log"
 )
 
@@ -27,10 +25,13 @@ func main() {
 	messageRepository := repository.NewMessageRepository()
 	messageHistoryRepository := repository.NewMessageHistoryRepository()
 
-	initializeRMQ(&config, messageRepository, messageHistoryRepository, gormDB)
+	// initialize service
+	consumerService := service.NewConsumerService(&config, messageRepository, messageHistoryRepository, gormDB)
+
+	initializeRMQ(&config, consumerService)
 }
 
-func initializeRMQ(config *configs.Config, messageRepository *repository.MessageRepository, messageHistoryRepository *repository.MessageHistoryRepository, postgresDB *gorm.DB) {
+func initializeRMQ(config *configs.Config, consumerService *service.ConsumerService) {
 	// set rmq
 	conn, err := amqp.Dial(config.RMQUrl)
 	if err != nil {
@@ -58,41 +59,8 @@ func initializeRMQ(config *configs.Config, messageRepository *repository.Message
 	forever := make(chan bool)
 	go func() {
 		for m := range msg {
-			go handleMessage(m, messageRepository, messageHistoryRepository, postgresDB)
+			consumerService.HandleMessage(m)
 		}
 	}()
 	<-forever
-}
-
-func handleMessage(msg amqp.Delivery, messageRepository *repository.MessageRepository, messageHistoryRepository *repository.MessageHistoryRepository, postgresDB *gorm.DB) {
-	response := &rmq.Message{}
-	err := json.Unmarshal(msg.Body, response)
-	if err != nil {
-		log.Printf("ERROR: fail unmarshl: %s", msg.Body)
-		return
-	}
-
-	tx := postgresDB.Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
-
-	updatedMessage, err := messageRepository.Update(tx, response)
-	if err != nil {
-		tx.Rollback()
-		log.Printf("ERROR: cannot update a message")
-		return
-	}
-
-	_, err = messageHistoryRepository.Save(tx, updatedMessage.MessageId, "SENT", "RECEIVED")
-	if err != nil {
-		tx.Rollback()
-		log.Printf("ERROR: cannot insert message history for message %s", updatedMessage.MessageId)
-		return
-	}
-
-	tx.Commit()
-	log.Printf("Successfully update: %s", updatedMessage)
 }
