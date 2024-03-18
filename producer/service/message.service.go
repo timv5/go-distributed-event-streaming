@@ -22,7 +22,13 @@ type MessageService struct {
 
 func NewMessageService(config *configs.Config, messageRepository *repository.MessageRepository,
 	messageHistoryRepository *repository.MessageHistoryRepository, postgresDB *gorm.DB, outboxMessageRepository *repository.OutboxMessageRepository) *MessageService {
-	return &MessageService{conf: config, messageRepository: messageRepository, messageHistoryRepository: messageHistoryRepository, postgresDB: postgresDB, outboxMessageRepository: outboxMessageRepository}
+	return &MessageService{
+		conf:                     config,
+		messageRepository:        messageRepository,
+		messageHistoryRepository: messageHistoryRepository,
+		postgresDB:               postgresDB,
+		outboxMessageRepository:  outboxMessageRepository,
+	}
 }
 
 func (mess *MessageService) SaveMessage(header string, body string) (response.MessageResponse, error) {

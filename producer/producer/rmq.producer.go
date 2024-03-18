@@ -3,25 +3,37 @@ package producer
 import (
 	"encoding/json"
 	"github.com/streadway/amqp"
+	"go-distributed-event-streaming/configs"
 	"go-distributed-event-streaming/dto/rmq"
 	"go-distributed-event-streaming/model"
 	"log"
 	"time"
 )
 
+type RMQProducerInterface interface {
+	ProduceMessage(savedMessage *model.Message)
+}
+
 type RMQProducer struct {
-	QueueName        string
-	ConnectionString string
-	ExchangeKey      string
+	config *configs.Config
+}
+
+func NewRMQProducer(config *configs.Config) *RMQProducer {
+	return &RMQProducer{config: config}
 }
 
 func (pr RMQProducer) ProduceMessage(savedMessage *model.Message) {
 	// set rmq
-	conn, err := amqp.Dial(pr.ConnectionString)
+	conn, err := amqp.Dial(pr.config.RMQUrl)
 	if err != nil {
 		panic("Could not initialize RMQ")
 	}
-	defer conn.Close()
+	defer func(conn *amqp.Connection) {
+		err := conn.Close()
+		if err != nil {
+			log.Fatalf("Could not initialize RMQ")
+		}
+	}(conn)
 
 	log.Println("Successfully connected to RMQ")
 
@@ -30,9 +42,14 @@ func (pr RMQProducer) ProduceMessage(savedMessage *model.Message) {
 	if err != nil {
 		panic("Cannot connect to RMQ channel")
 	}
-	defer ch.Close()
+	defer func(ch *amqp.Channel) {
+		err := ch.Close()
+		if err != nil {
+			log.Fatalf("Cannot connect to RMQ channel")
+		}
+	}(ch)
 
-	queue, err := ch.QueueDeclare(pr.QueueName, false, false, false, false, nil)
+	queue, err := ch.QueueDeclare(pr.config.RMQQueueName, false, false, false, false, nil)
 	if err != nil {
 		panic("Cannot connect to Queue")
 	}
@@ -47,7 +64,7 @@ func (pr RMQProducer) ProduceMessage(savedMessage *model.Message) {
 
 	err = ch.Publish(
 		"",
-		pr.QueueName,
+		pr.config.RMQQueueName,
 		false,
 		false,
 		amqp.Publishing{
