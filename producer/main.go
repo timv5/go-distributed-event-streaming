@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"go-distributed-event-streaming/client"
 	"go-distributed-event-streaming/configs"
 	"go-distributed-event-streaming/handler"
 	"go-distributed-event-streaming/producer"
@@ -43,6 +44,7 @@ func main() {
 	// initialize service
 	outboxService := service.NewOutboxService(rmqProducer)
 	messageService := service.NewMessageService(&config, messageRepository, messageHistoryRepository, gormDB, outboxMessageRepository)
+	restClient := client.NewRestClient()
 
 	// scheduler
 	go func() {
@@ -65,7 +67,7 @@ func main() {
 	}()
 
 	// initialize controllers and routes
-	MessageController = handler.NewMessageHandler(configs.DB, messageService, &config)
+	MessageController = handler.NewMessageHandler(configs.DB, messageService, &config, &restClient)
 	MessageRouteController = route.NewMessageRouteHandler(MessageController)
 
 	server = gin.Default()
